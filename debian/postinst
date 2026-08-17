@@ -1,0 +1,94 @@
+#!/bin/sh
+set -e
+
+# 创建数据目录并赋权
+mkdir -p /var/lib/task-manager
+chmod 750 /var/lib/task-manager
+
+ENV_FILE="/etc/task-manager.env"
+PORT="33601"
+
+# 判断是首次创建还是二次安装读取
+if [ ! -f "$ENV_FILE" ]; then
+    echo "[+] Creating new configuration and SECRET_TOKEN..."
+    RAND_TOKEN=$(openssl rand -hex 32)
+    
+    mkdir -p /etc
+    cat << EOF > "$ENV_FILE"
+HOST=0.0.0.0
+PORT=$PORT
+DB_FILE=/var/lib/task-manager/tasks.db
+SECRET_TOKEN=$RAND_TOKEN
+EOF
+    chmod 600 "$ENV_FILE"
+else
+    echo "[*] Existing configuration found. Extracting current SECRET_TOKEN..."
+    # 从已有文件中提取 SECRET_TOKEN 的值
+    RAND_TOKEN=$(grep -E "^SECRET_TOKEN=" "$ENV_FILE" | cut -d'=' -f2-)
+fi
+
+# 刷新 systemd 并重启/启动服务
+if [ -d /run/systemd/system ]; then
+    echo "[+] Reloading systemd manager configuration..."
+    systemctl daemon-reload
+    echo "[+] Restarting task-manager.service..."
+    systemctl restart task-manager.service || true
+fi
+
+# ==============================================================================
+#                      用户运行与使用指南 (User Guide)
+# ==============================================================================
+echo ""
+echo "========================================================================"
+echo "    🎉 TASK MANAGER INSTALLED SUCCESSFULLY 🎉"
+echo "========================================================================"
+echo " 🔑  Your SECRET_TOKEN is:"
+echo "     $RAND_TOKEN"
+echo " 📁  Configuration file path:"
+echo "     $ENV_FILE"
+echo "------------------------------------------------------------------------"
+echo " 🚀  HOW TO MANAGE THE SERVICE:"
+echo "     - Check status:  systemctl status task-manager"
+echo "     - View logs:     journalctl -u task-manager -f"
+echo "     - Restart:       systemctl restart task-manager"
+echo "------------------------------------------------------------------------"
+echo " 📡  HOW TO TEST THE API (Using cURL):"
+echo "     The service is listening on port $PORT by default."
+echo ""
+echo "     ① Import Tasks (POST):"
+echo "        curl -X POST http://127.0.0.1:$PORT/tasks/import \\"
+echo "             -H 'Content-Type: application/json' \\"
+echo "             -H 'X-API-Token: $RAND_TOKEN' \\"
+echo "             -d '{\"task_ids\": [\"task_001\", \"task_002\"]}'"
+echo ""
+echo "     ② Pop a Task (GET):"
+echo "        curl -X GET http://127.0.0.1:$PORT/tasks/pop \\"
+echo "             -H 'X-API-Token: $RAND_TOKEN'"
+echo ""
+echo "     ③ Complete Task (POST):"
+echo "        curl -X POST http://127.0.0.1:$PORT/tasks/task_001/complete \\"
+echo "             -H 'X-API-Token: $RAND_TOKEN'"
+echo ""
+echo "     ④ Get Stats (GET):"
+echo "        curl -X GET http://127.0.0.1:$PORT/tasks/stats \\"
+echo "             -H 'X-API-Token: $RAND_TOKEN'"
+echo ""
+echo "     ⑤ Reset Tasks (POST):"
+echo "        * Reset all RUNNING tasks:"
+echo "          curl -X POST http://127.0.0.1:$PORT/tasks/reset \\"
+echo "               -H 'X-API-Token: $RAND_TOKEN'"
+echo ""
+echo "        * Reset a specific task:"
+echo "          curl -X POST http://127.0.0.1:$PORT/tasks/reset?task_id=task_001 \\"
+echo "               -H 'X-API-Token: $RAND_TOKEN'"
+echo ""
+echo "     ⑥ Clear Tasks (POST):"
+echo "        curl -X POST http://127.0.0.1:$PORT/tasks/clear \\"
+echo "             -H 'X-API-Token: $RAND_TOKEN'"
+echo "========================================================================"
+echo ""
+
+#DEBHELPER#
+
+exit 0
+

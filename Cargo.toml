@@ -1,0 +1,29 @@
+[package]
+name = "task-manager"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A lightweight FastAPI-to-Rust refactored task queue manager powered by Axum and SQLite."
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tower-http = { version = "0.5", features = ["validate-request"] }
+
+[package.metadata.deb]
+name = "task-manager"
+maintainer = "Liu <dev@liudev.com>"
+copyright = "2026, Liu"
+priority = "optional"
+section = "utils"
+maintainer-scripts = "debian"
+assets = [
+    ["target/release/task-manager", "usr/bin/task-manager", "755"],
+]
+
+[package.metadata.deb.systemd-units]
+unit-scripts = "debian/systemd"
+

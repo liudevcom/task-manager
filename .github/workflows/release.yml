@@ -1,0 +1,100 @@
+name: Build and Release Multi-Platform Packages
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers on tags like v1.0.0
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build for ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 1. Debian/Ubuntu Packaged Variant (.deb)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: task-manager-deb        # Fixed: Underscore to hyphen
+            is_deb: true
+            
+          # 2. Raw Linux Binary (Standalone Executable)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: task-manager-linux-amd64 # Fixed: Underscore to hyphen
+            is_deb: false
+
+          # 3. Windows Binary (.exe)
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: task-manager-windows-amd64.exe # Fixed: Underscore to hyphen
+            is_deb: false
+
+          # 4. macOS Binary (Mac Executable)
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: task-manager-macos-amd64 # Fixed: Underscore to hyphen
+            is_deb: false
+
+    steps:
+    - name: 1. Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: 2. Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: 3. Set Up Cargo Cache (Speeds up builds)
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+    # --- BLOCK A: Executed ONLY for the Debian Packaged build ---
+    - name: 4a. Install cargo-deb (Debian Only)
+      if: matrix.is_deb == true
+      run: |
+        command -v cargo-deb >/dev/null 2>&1 || cargo install cargo-deb
+
+    - name: 5a. Build DEB Package (Debian Only)
+      if: matrix.is_deb == true
+      run: |
+        cargo deb
+        # Move the generated .deb package to the current directory for easier uploading
+        mv target/debian/*.deb ./
+
+    # --- BLOCK B: Executed for Standalone Binary targets (Windows, Mac, Raw Linux) ---
+    - name: 4b. Build Standalone Binary (Standard Cross-Platform)
+      if: matrix.is_deb == false
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: 5b. Rename Standalone Binaries for Asset Clarity
+      if: matrix.is_deb == false
+      shell: bash
+      run: |
+        if [ "${{ matrix.os }}" = "windows-latest" ]; then
+          # Fixed: target/release directory structures for cross-compilation target paths and names
+          mv target/${{ matrix.target }}/release/task-manager.exe ./${{ matrix.artifact_name }}
+        else
+          mv target/${{ matrix.target }}/release/task-manager ./${{ matrix.artifact_name }}
+        fi
+
+    # --- FINAL STEP: Upload files to the release page ---
+    - name: 6. Dynamically Upload Output to GitHub Releases
+      uses: softprops/action-gh-release@v2
+      with:
+        # Fixed: Resolved structural issues with multi-line ternary statements inside standard YAML strings
+        files: ${{ matrix.is_deb == true && '*.deb' || matrix.artifact_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

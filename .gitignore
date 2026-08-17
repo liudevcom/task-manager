@@ -1,0 +1,9 @@
+# Cargo build outputs
+/target/
+
+# Local configuration files containing private credentials
+*.env
+*.db
+
+# OS generated files
+.DS_Store

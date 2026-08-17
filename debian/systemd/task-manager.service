@@ -1,0 +1,16 @@
+[Unit]
+Description=Rust Task Manager API Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/lib/task-manager
+ExecStart=/usr/bin/task-manager
+EnvironmentFile=/etc/task-manager.env
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+
